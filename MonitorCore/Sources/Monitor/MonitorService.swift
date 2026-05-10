@@ -1,8 +1,6 @@
 import AppKit
 import Combine
 
-let checkInterval: TimeInterval = 1.0
-
 public struct MonitorService {
     public static let observerStatus = PassthroughSubject<Bool, Never>()
     private static var observedAppInfos: [String: ObservedAppInfo] = [:]
@@ -28,17 +26,13 @@ public struct MonitorService {
         }
     }
 
-    public static func setupObservers() {
-        timer = Timer.scheduledTimer(withTimeInterval: checkInterval, repeats: true) { timer in
-            if appCreateObserver == nil || appDestroyObserver == nil {
-                setupAxObserversOnDock()
-            }
-
-            observedAppInfos.keys.forEach { appName in
-                observedAppInfos[appName]?.onBadgeUpdate(getBadgeText(appName: appName))
-            }
-        }
+    public static func setupObservers(checkInterval: TimeInterval = 1.0) {
+        scheduleTimer(checkInterval: checkInterval)
         timer?.fire()
+    }
+
+    public static func updateCheckInterval(_ checkInterval: TimeInterval) {
+        scheduleTimer(checkInterval: checkInterval)
     }
 
     public static func observe(appName: String, onUpdate: @escaping (String?) -> Void) {
@@ -174,6 +168,23 @@ public struct MonitorService {
         observedAppInfos.keys.forEach { appName in
             let info = observedAppInfos[appName]
             observedAppInfos[appName]?.updateAppElement(info?.appElement ?? tryGetTargetAppElement(appName: appName))
+        }
+    }
+
+    private static func scheduleTimer(checkInterval: TimeInterval) {
+        timer?.invalidate()
+        timer = Timer.scheduledTimer(withTimeInterval: max(checkInterval, 1.0), repeats: true) { timer in
+            pollBadges()
+        }
+    }
+
+    private static func pollBadges() {
+        if appCreateObserver == nil || appDestroyObserver == nil {
+            setupAxObserversOnDock()
+        }
+
+        observedAppInfos.keys.forEach { appName in
+            observedAppInfos[appName]?.onBadgeUpdate(getBadgeText(appName: appName))
         }
     }
 }

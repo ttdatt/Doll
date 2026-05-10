@@ -11,6 +11,7 @@ import Monitor
 import KeyboardShortcuts
 
 struct ConfigView: View {
+    private static let intervalPresets: [Double] = [1, 2, 5, 10]
 
     @State private var failedToSetupObservers = false
     @State private var presentingPermissionGuidline = false
@@ -25,6 +26,8 @@ struct ConfigView: View {
     @State private var showAlertInFullScreenMode = AppSettings.showAlertInFullScreenMode
     @State private var showAsRedBadge = AppSettings.showAsRedBadge
     @State private var showOnlyAppIcon = AppSettings.showOnlyAppIcon
+    @State private var selectedInterval = ConfigView.intervalPresets.contains(AppSettings.badgeCheckInterval) ? String(format: "%.0f", AppSettings.badgeCheckInterval) : "custom"
+    @State private var customIntervalText = String(format: "%.0f", AppSettings.badgeCheckInterval)
 
     var body: some View {
         NavigationView {
@@ -100,6 +103,39 @@ struct ConfigView: View {
                             }
                             .fixedSize()
 
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Badge check interval")
+                            .fixedSize()
+
+                        HStack {
+                            Picker("", selection: $selectedInterval) {
+                                ForEach(ConfigView.intervalPresets, id: \.self) { interval in
+                                    Text("\(Int(interval))s").tag(String(format: "%.0f", interval))
+                                }
+                                Text("Custom").tag("custom")
+                            }
+                            .pickerStyle(.segmented)
+                            .fixedSize()
+                            .onChange(of: selectedInterval) { value in
+                                if value == "custom" {
+                                    applyCustomInterval()
+                                } else if let interval = Double(value) {
+                                    applyCheckInterval(interval)
+                                }
+                            }
+
+                            if selectedInterval == "custom" {
+                                TextField("Seconds", text: $customIntervalText)
+                                    .frame(width: 70)
+                                    .textFieldStyle(.roundedBorder)
+                                    .onChange(of: customIntervalText) { _ in
+                                        applyCustomInterval()
+                                    }
+                                Text("s")
+                            }
+                        }
+                    }
+
                     Text("Hotkey to open this config window")
                         .fixedSize()
                     KeyboardShortcuts
@@ -158,5 +194,24 @@ struct ConfigView: View {
             failedToSetupObservers = !attached
         }
 
+    }
+
+    private func applyCustomInterval() {
+        guard let interval = Double(customIntervalText.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+            return
+        }
+
+        applyCheckInterval(interval)
+    }
+
+    private func applyCheckInterval(_ interval: Double) {
+        let clampedInterval = min(max(interval, 1), 60)
+        AppSettings.badgeCheckInterval = clampedInterval
+        MonitorService.updateCheckInterval(clampedInterval)
+
+        let formattedInterval = String(format: "%.0f", clampedInterval)
+        if customIntervalText != formattedInterval {
+            customIntervalText = formattedInterval
+        }
     }
 }

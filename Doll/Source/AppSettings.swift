@@ -18,6 +18,9 @@ class AppSettings {
     @UserDefaultSetting("SETTINGS_Show_Only_App_Icon")
     static var showOnlyAppIcon = false
 
+    @UserDefaultSetting("SETTINGS_Badge_Check_Interval")
+    static var badgeCheckInterval: Double = 1.0
+
     @UserDefaultSetting("SETTINGS_Giant_Badge_Enabled_Apps")
     static var giantBadgeConfigs: [String: Bool] = [:]
 

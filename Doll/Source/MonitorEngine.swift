@@ -17,7 +17,7 @@ class MonitorEngine {
     }
 
     func setup() {
-        MonitorService.setupObservers()
+        MonitorService.setupObservers(checkInterval: AppSettings.badgeCheckInterval)
         
         if let data = UserDefaults.standard.value(forKey: SETTING_MONITORED_APP_IDS) as? String {
             let monitoredAppIds = data.split(separator: ",").map(String.init)
