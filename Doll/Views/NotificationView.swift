@@ -20,6 +20,7 @@ struct NotificationView: View {
                     .fontWeight(.bold)
         }
                 .padding(8)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .contentShape(Rectangle())
                 .onTapGesture {
                     onTap()

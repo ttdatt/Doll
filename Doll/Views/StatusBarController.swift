@@ -16,6 +16,7 @@ class StatusBarController {
                               styleMask: [.nonactivatingPanel],
                               backing: .buffered, defer: false)
     private var lastTimeShowingGiantBadge = Date()
+    private var notificationPanel: NSPanel?
 
     public var statusItem: NSStatusItem!
     public var monitoredApp: MonitoredApp? {
@@ -129,21 +130,6 @@ class StatusBarController {
         }
     }
 
-    func showPopover(popover: NSPopover? = nil) {
-        if let statusBarButton = statusItem.button {
-            popover?.show(relativeTo: statusBarButton.bounds, of: statusBarButton, preferredEdge: .maxY)
-            if let contentWindow = popover?.contentViewController?.view.window {
-                // A little hack to prevent popover shitup with menubar
-                // https://stackoverflow.com/a/35047661
-                contentWindow.parent?.removeChildWindow(contentWindow)
-            }
-        }
-    }
-
-    func hidePopover(popover: NSPopover? = nil) {
-        popover?.performClose(nil)
-    }
-
     func hideStatusBar() {
         statusItem.isVisible = false
     }
@@ -193,8 +179,10 @@ class StatusBarController {
 
         let newMessageCount = Int(newText) ?? 0
         if latestBadgeText != newText {
-            if AppSettings.showAlertInFullScreenMode {
-                tryShowTheNewNotificationPopover(newText: newText)
+            if AppSettings.showAlertInFullScreenMode,
+               !newText.isEmpty,
+               Int(newText) == nil || newMessageCount > latestMessageCount {
+                tryShowTheNewNotificationPanel(newText: newText)
             }
 
             let frontmostAppIsMonitoredApp = NSWorkspace.shared.frontmostApplication?.bundleIdentifier == monitoredApp?.bundleId
@@ -280,14 +268,28 @@ class StatusBarController {
         giantBadgePanel.setIsVisible(false)
     }
 
-    func tryShowTheNewNotificationPopover(newText: String) {
-        if Utils.currentActiveWindowIsFullScreen {
+    func tryShowTheNewNotificationPanel(newText: String, force: Bool = false) {
+        guard (force || Utils.currentActiveWindowIsFullScreen),
+              let window = statusItem.button?.window,
+              let screen = window.screen else { return }
 
-            let notificationPopover = createNotificationPopover(newText: newText)
-            showPopover(popover: notificationPopover)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
-                self?.hidePopover(popover: notificationPopover)
-            }
+        notificationPanel?.close()
+        let panel = createNotificationPanel(newText: newText)
+        let iconFrame = window.frame
+        let horizontalMargin: CGFloat = 8
+        let centeredX = iconFrame.midX - panel.frame.width / 2
+        let x = min(max(centeredX, screen.visibleFrame.minX + horizontalMargin),
+                    screen.visibleFrame.maxX - panel.frame.width - horizontalMargin)
+        let menuBarBottom = min(screen.visibleFrame.maxY,
+                                screen.frame.maxY - screen.safeAreaInsets.top)
+        panel.setFrameOrigin(NSPoint(x: x, y: menuBarBottom - panel.frame.height - 6))
+        notificationPanel = panel
+        panel.orderFrontRegardless()
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self, weak panel] in
+            guard self?.notificationPanel === panel else { return }
+            panel?.close()
+            self?.notificationPanel = nil
         }
     }
 
@@ -300,15 +302,24 @@ class StatusBarController {
         }
     }
 
-    private func createNotificationPopover(newText: String) -> NSPopover {
-        let notificationPopover = NSPopover()
+    private func createNotificationPanel(newText: String) -> NSPanel {
         let textWidth = newText
                 .width(withConstrainedHeight: defaultIconSize, font: .systemFont(ofSize: 14))
         let horizonPadding: CGFloat = 32
         let verticalPadding: CGFloat = 16
-        notificationPopover.contentSize = NSSize(width: defaultIconSize + textWidth + horizonPadding, height: defaultIconSize + verticalPadding)
-        notificationPopover.behavior = .transient
-        notificationPopover.setValue(true, forKeyPath: "shouldHideAnchor")
+        let panelSize = NSSize(width: defaultIconSize + textWidth + horizonPadding,
+                               height: defaultIconSize + verticalPadding)
+        let panel = NSPanel(contentRect: NSRect(origin: .zero,
+                                                size: panelSize),
+                            styleMask: [.nonactivatingPanel],
+                            backing: .buffered,
+                            defer: false)
+        panel.level = .popUpMenu
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        panel.becomesKeyOnlyIfNeeded = true
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = true
 
         let targetApp = monitoredApp
         let view = NotificationView(icon: monitoredAppIcon ?? defaultIcon, badgeText: newText) {
@@ -316,9 +327,10 @@ class StatusBarController {
                 MonitorService.openMonitoredApp(appName: monitoredAppName)
             }
         }
-        notificationPopover.contentViewController = NSHostingController(rootView: view)
+        panel.contentViewController = NSHostingController(rootView: view)
+        panel.setContentSize(panelSize)
 
-        return notificationPopover
+        return panel
     }
 }
 

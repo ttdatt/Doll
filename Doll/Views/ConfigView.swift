@@ -140,6 +140,11 @@ struct ConfigView: View {
                         .fixedSize()
                     KeyboardShortcuts
                         .Recorder("", name: .toggleConfigWindow)
+
+                    Button("Test notification popup") {
+                        MonitorEngine.shared.statusBars.first?.tryShowTheNewNotificationPanel(newText: "1", force: true)
+                    }
+                    .disabled(MonitorEngine.shared.statusBars.isEmpty)
                 }
                         .padding()
 
